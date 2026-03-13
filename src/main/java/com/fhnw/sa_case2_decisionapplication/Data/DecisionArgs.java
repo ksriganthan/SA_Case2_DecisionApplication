@@ -15,7 +15,7 @@ public class DecisionArgs {
 		ARG, JAP, DE, CH, RUS
 	}
 
-	private Long weight;
+	private Integer weight;
 	private DestinationCountry destinationCountry; // Land
 	private DecisionType decisionType; // Flag
 	private ShippingMethod shippingMethod; // Action
@@ -23,11 +23,11 @@ public class DecisionArgs {
 	private Integer ruleId;
 
 
-	public Long getWeight() {
+	public Integer getWeight() {
 		return weight;
 	}
 
-	public void setWeight(Long weight) {
+	public void setWeight(Integer weight) {
 		this.weight = weight;
 	}
 

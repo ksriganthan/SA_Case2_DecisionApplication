@@ -20,7 +20,6 @@ Die Anwendung nimmt Sendungsdaten (Gewicht & Zielland) entgegen, wertet sie gege
 8. [API-Dokumentation](#8-api-dokumentation)
 9. [Konfiguration](#9-konfiguration)
 10. [Anwendung starten](#10-anwendung-starten)
-11. [Bekannte Fehler & Lösungen](#11-bekannte-fehler--lösungen)
 
 ---
 
@@ -387,51 +386,6 @@ java -jar target/SA_Case2_DecisionApplication-0.0.1-SNAPSHOT.jar
 1. `SaCase2DecisionApplication.java` öffnen
 2. Grünen Play-Button ▶ neben der `main`-Methode klicken
 3. Die Anwendung startet auf **http://localhost:8081**
-
----
-
-## 11. Bekannte Fehler & Lösungen
-
-### ❌ `The method setRuleId(Long) is not applicable for the arguments (int)`
-
-**Ursache:**  
-Die Excel-Entscheidungstabelle übergibt ganzzahlige Literale (z. B. `1`, `2`, `3`) als `int`.  
-Wenn `setRuleId` als `Long`-Typ definiert ist, entsteht ein Typkonflikt.
-
-**Lösung:**  
-In `DecisionArgs.java` muss das Feld `ruleId` als `Integer` (nicht `Long`) deklariert sein:
-
-```java
-// ✅ Korrekt:
-private Integer ruleId;
-public void setRuleId(Integer ruleId) { this.ruleId = ruleId; }
-
-// ❌ Verursacht Fehler:
-private Long ruleId;
-public void setRuleId(Long ruleId) { this.ruleId = ruleId; }
-```
-
----
-
-### ⚠️ `File 'rules/ShippingRules.drl.xls' is in folder 'rules' but declares package '...'`
-
-**Ursache:**  
-Drools erwartet eine Übereinstimmung zwischen dem deklarierten Java-Package in der Regeldatei und dem Ordnernamen.
-
-**Auswirkung:**  
-Nur eine Warnung – die Anwendung läuft trotzdem korrekt.
-
----
-
-### ⚠️ `Environment variable M2_HOME is not set`
-
-**Ursache:**  
-Die Umgebungsvariable `M2_HOME` zeigt nicht auf die Maven-Installation.
-
-**Lösung (Windows):**
-```powershell
-$env:M2_HOME = "C:\Path\To\Maven"
-```
 
 ---
 
