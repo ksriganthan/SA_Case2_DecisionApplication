@@ -62,17 +62,17 @@ Gegeben eine Sendung mit einem bestimmten **Gewicht** und einem **Zielland**, en
 
 ## 2. Technologie-Stack
 
-| Technologie              | Version        | Verwendungszweck                              |
-|--------------------------|----------------|-----------------------------------------------|
-| **Java**                 | 17+            | Programmiersprache                            |
-| **Spring Boot**          | 4.0.3          | Anwendungsframework, REST-Server (Port 8081)  |
-| **Drools / KIE**         | 8.32.0.Final   | Regel-Engine zur Entscheidungsauswertung      |
-| **Drools Decision Table**| 8.32.0.Final   | Excel-basiertes Regelwerk (`.drl.xls`)        |
-| **Apache POI**           | 5.1.0          | Lesen der Excel-Entscheidungstabelle          |
-| **Camunda External Task**| 1.3.1          | Integration in BPMN-Prozesse (Camunda Engine) |
-| **Jersey (JAX-RS)**      | 2.31           | REST-Client-Bibliothek                        |
-| **Jackson**              | 2.x / 3.x      | JSON-Serialisierung / -Deserialisierung       |
-| **Maven**                | –              | Build-Tool & Dependency-Management            |
+| Technologie              | Version        | Verwendungszweck                                                     |
+|--------------------------|----------------|----------------------------------------------------------------------|
+| **Java**                 | 17+            | Programmiersprache                                                   |
+| **Spring Boot**          | 4.0.3          | Anwendungsframework, REST-Server (Port 8081)                         |
+| **Drools / KIE**         | 8.32.0.Final   | Regel-Engine zur Entscheidungsauswertung (`kie-ci`)                  |
+| **Drools Decision Table**| 8.32.0.Final   | Excel-basiertes Regelwerk (`.drl.xls`, `drools-decisiontables`)      |
+| **MVEL2**                | 2.5.2.Final    | MVEL-Override: Kompatibilitäts-Fix für JDK 17+ (entfernter Compiler) |
+| **Camunda External Task**| 1.3.1          | Dependency für geplante BPMN-Integration (aktuell nicht aktiv genutzt)|
+| **Jersey (JAX-RS)**      | 2.31           | REST-Client-Bibliothek (Dependency, für externe Aufrufe vorgesehen)  |
+| **Jackson Databind**     | 2.10.0         | JSON-Serialisierung / -Deserialisierung                              |
+| **Maven**                | –              | Build-Tool & Dependency-Management                                   |
 
 ---
 
@@ -109,14 +109,14 @@ SA_Case2_DecisionApplication/
 
 Das Hauptobjekt, das durch die Regel-Engine verarbeitet wird. Es enthält **Eingabefelder** (werden vor der Verarbeitung gesetzt) und **Ausgabefelder** (werden durch die Regeln befüllt).
 
-| Feld                 | Typ                  | Richtung  | Beschreibung                                    |
-|----------------------|----------------------|-----------|-------------------------------------------------|
-| `weight`             | `Long`               | Eingabe   | Gewicht der Sendung in Gramm                    |
-| `destinationCountry` | `DestinationCountry` | Eingabe   | Zielland der Sendung                            |
-| `decisionType`       | `DecisionType`       | Ausgabe   | `AUTOMATIC` oder `MANUAL`                      |
-| `shippingMethod`     | `ShippingMethod`     | Ausgabe   | `SPECIAL`, `NORMAL` oder `AIR`                 |
-| `carrier`            | `String`             | Ausgabe   | Name des zugewiesenen Carriers                  |
-| `ruleId`             | `Integer`            | Ausgabe   | ID der angewendeten Regel                       |
+| Feld                 | Typ                  | Richtung  | Beschreibung                     |
+|----------------------|----------------------|-----------|----------------------------------|
+| `weight`             | `Integer`            | Eingabe   | Gewicht der Sendung in Kilogramm |
+| `destinationCountry` | `DestinationCountry` | Eingabe   | Zielland der Sendung             |
+| `decisionType`       | `DecisionType`       | Ausgabe   | `AUTOMATIC` oder `MANUAL`        |
+| `shippingMethod`     | `ShippingMethod`     | Ausgabe   | `SPECIAL`, `NORMAL` oder `AIR`   |
+| `carrier`            | `String`             | Ausgabe   | Name des zugewiesenen Carriers   |
+| `ruleId`             | `Integer`            | Ausgabe   | ID der angewendeten Regel        |
 
 **Enumerationen:**
 
@@ -227,27 +227,30 @@ public class DecisionService {
 Verwaltet den **gesamten Drools-Lebenszyklus** pro Aufruf:
 
 ```
-Schritt 1: KieServices.Factory.get()
+Schritt 1: System.setProperty("drools.dialect.mvel.strict", "false")
+           → MVEL-Strict-Mode deaktivieren (Kompatibilitäts-Fix für JDK 17+)
+
+Schritt 2: KieServices.Factory.get()
            → Zugriff auf den KIE-Dienst
 
-Schritt 2: ResourceFactory.newClassPathResource("rules/ShippingRules.drl.xls")
+Schritt 3: ResourceFactory.newClassPathResource("rules/ShippingRules.drl.xls", getClass())
            → Excel-Regeldatei aus dem Classpath laden
 
-Schritt 3: kieFileSystem.write(dt) → KieBuilder.buildAll()
+Schritt 4: kieFileSystem.write(dt) → KieBuilder.buildAll()
            → Excel-Tabelle in DRL-Regeln kompilieren
            → Bei Fehler: RuntimeException werfen
 
-Schritt 4: kieContainer.newKieSession()
+Schritt 5: kieContainer.newKieSession()
            → Neue Regel-Session erstellen
 
-Schritt 5: decisionArgs.setDecisionType(MANUAL)  ← Standardwert: MANUELL
+Schritt 6: decisionArgs.setDecisionType(MANUAL)  ← Standardwert: MANUELL
            kieSession.insert(decisionArgs)         ← Fact einfügen
            kieSession.fireAllRules()               ← Alle passenden Regeln auswerten
 
-Schritt 6: kieSession.dispose()
+Schritt 7: kieSession.dispose()
            → Session sauber beenden
 
-Schritt 7: Ergebnis zurückgeben
+Schritt 8: Ergebnis zurückgeben
            → Falls Regeln gefeuert: DecisionType evtl. auf AUTOMATIC gesetzt
            → Falls keine Regel: bleibt MANUAL
 ```
@@ -273,6 +276,7 @@ DecisionService.validateConsignment(DecisionArgs)
          │
          ▼
 RuleEngineLauncher.makeDecision(DecisionArgs)
+    ├─ drools.dialect.mvel.strict = false  (JDK-17-Kompatibilität)
     ├─ Excel-Datei laden & kompilieren
     ├─ KIE-Session erstellen
     ├─ decisionType = MANUAL  (Standardwert)
@@ -314,9 +318,9 @@ Content-Type: application/json
 ```
 
 | Feld                 | Typ     | Pflicht | Beschreibung                                                 |
-|----------------------|---------|---------|--------------------------------------------------------------|
-| `weight`             | Long    | ✅ Ja  | Gewicht in Gramm (muss > 0 sein)                             |
-| `destinationCountry` | String  | ✅ Ja  | Zielland: `ARG`, `JAP`, `DE`, `CH`, `RUS`                   |
+|----------------------|---------|-------|--------------------------------------------------------------|
+| `weight`             | Integer |  Ja | Gewicht in Gramm (muss > 0 sein)                             |
+| `destinationCountry` | String  |  Ja | Zielland: `ARG`, `JAP`, `DE`, `CH`, `RUS`                   |
 
 **Antwort (200 OK):**
 ```json
@@ -386,6 +390,22 @@ java -jar target/SA_Case2_DecisionApplication-0.0.1-SNAPSHOT.jar
 1. `SaCase2DecisionApplication.java` öffnen
 2. Grünen Play-Button ▶ neben der `main`-Methode klicken
 3. Die Anwendung startet auf **http://localhost:8081**
+
+---
+
+## 11. Tests
+
+Im Projekt ist ein einfacher Spring-Boot-Kontexttest enthalten:
+
+| Testklasse                          | Test            | Beschreibung                                  |
+|-------------------------------------|-----------------|-----------------------------------------------|
+| `SaCase2DecisionApplicationTests`   | `contextLoads`  | Prüft, ob der Spring-Anwendungskontext korrekt startet |
+
+Tests ausführen:
+
+```bash
+./mvnw test
+```
 
 ---
 

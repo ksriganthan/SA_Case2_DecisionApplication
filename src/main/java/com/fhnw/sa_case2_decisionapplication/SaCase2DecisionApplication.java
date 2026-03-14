@@ -10,8 +10,8 @@ public class SaCase2DecisionApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(SaCase2DecisionApplication.class, args);
-        DecisionArgs testConsignment = new DecisionArgs();
-        testConsignment.setWeight(100L);
+        /*DecisionArgs testConsignment = new DecisionArgs();
+        testConsignment.setWeight(100);
         testConsignment.setDestinationCountry(DecisionArgs.DestinationCountry.ARG);
 
         RuleEngineLauncher launcher = new RuleEngineLauncher();
@@ -20,7 +20,7 @@ public class SaCase2DecisionApplication {
         System.out.println("DecisionType: " + testConsignment.getDecisionType());
         System.out.println("ShippingMethod: " + testConsignment.getShippingMethod());
         System.out.println("Carrier: " + testConsignment.getCarrier());
-        System.out.println("RuleId: " + testConsignment.getRuleId());
+        System.out.println("RuleId: " + testConsignment.getRuleId()); */
     }
 
 }
