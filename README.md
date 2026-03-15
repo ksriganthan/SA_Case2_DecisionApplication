@@ -36,7 +36,7 @@ Gegeben eine Sendung mit einem bestimmten **Gewicht** und einem **Zielland**, en
 ```
 ┌──────────────┐     POST /decision/make     ┌─────────────────┐
 │   Client /   │ ─────────────────────────▶  │   DecisionAPI   │  (REST-Controller)
-│   Camunda    │ ◀───────────────────────── │  (RestAPI/)     │
+│   Camunda    │ ◀─────────────────────────  │  (RestAPI/)     │
 └──────────────┘     Decision (JSON)         └────────┬────────┘
                                                        │
                                                        ▼
@@ -62,17 +62,19 @@ Gegeben eine Sendung mit einem bestimmten **Gewicht** und einem **Zielland**, en
 
 ## 2. Technologie-Stack
 
-| Technologie              | Version        | Verwendungszweck                                                     |
-|--------------------------|----------------|----------------------------------------------------------------------|
-| **Java**                 | 17+            | Programmiersprache                                                   |
-| **Spring Boot**          | 4.0.3          | Anwendungsframework, REST-Server (Port 8081)                         |
-| **Drools / KIE**         | 8.32.0.Final   | Regel-Engine zur Entscheidungsauswertung (`kie-ci`)                  |
-| **Drools Decision Table**| 8.32.0.Final   | Excel-basiertes Regelwerk (`.drl.xls`, `drools-decisiontables`)      |
-| **MVEL2**                | 2.5.2.Final    | MVEL-Override: Kompatibilitäts-Fix für JDK 17+ (entfernter Compiler) |
-| **Camunda External Task**| 1.3.1          | Dependency für geplante BPMN-Integration (aktuell nicht aktiv genutzt)|
-| **Jersey (JAX-RS)**      | 2.31           | REST-Client-Bibliothek (Dependency, für externe Aufrufe vorgesehen)  |
-| **Jackson Databind**     | 2.10.0         | JSON-Serialisierung / -Deserialisierung                              |
-| **Maven**                | –              | Build-Tool & Dependency-Management                                   |
+| Technologie              | Version        | Verwendungszweck                                                        |
+|--------------------------|----------------|-------------------------------------------------------------------------|
+| **Java**                 | 17             | Programmiersprache                                                      |
+| **Spring Boot**          | 4.0.3          | Anwendungsframework, REST-Server (Port 8081)                            |
+| **Drools / KIE**         | 8.32.0.Final   | Regel-Engine zur Entscheidungsauswertung (`kie-ci`)                     |
+| **Drools Decision Table**| 8.32.0.Final   | Excel-basiertes Regelwerk (`.drl.xls`, `drools-decisiontables`)         |
+| **MVEL2**                | 2.5.2.Final    | MVEL-Override: Kompatibilitäts-Fix für JDK 17+ (entfernter Compiler)   |
+| **Camunda External Task**| 1.3.1          | Dependency für BPMN-Integration (aktuell nicht aktiv genutzt)           |
+| **Jersey (JAX-RS)**      | 2.31           | REST-Client-Bibliothek (für externe Aufrufe vorgesehen)                 |
+| **Jackson Databind**     | 2.10.0         | JSON-Serialisierung / -Deserialisierung                                 |
+| **Maven**                | –              | Build-Tool & Dependency-Management                                      |
+
+> **Hinweis:** Das Maven-Property `<kie.version>7.73.0.Final</kie.version>` in der `pom.xml` wird nicht von den Drools-Dependencies referenziert – diese verwenden explizit `8.32.0.Final`.
 
 ---
 
@@ -86,14 +88,14 @@ SA_Case2_DecisionApplication/
 │       ├── java/com/fhnw/sa_case2_decisionapplication/
 │       │   ├── SaCase2DecisionApplication.java   # Spring Boot Einstiegspunkt
 │       │   ├── Data/
-│       │   │   ├── DecisionArgs.java             # Eingabe- & Ausgabedaten (Fact)
-│       │   │   └── Decision.java                 # Rückgabe-DTO
+│       │   │   ├── DecisionArgs.java             # Drools-Fact: Eingabe & Ausgabe inkl. Enums
+│       │   │   └── Decision.java                 # Rückgabe-DTO (referenziert Enums aus DecisionArgs)
 │       │   ├── RestAPI/
 │       │   │   └── DecisionAPI.java              # REST-Controller
 │       │   ├── Service/
-│       │   │   └── DecisionService.java          # Geschäftslogik & Validierung
+│       │   │   └── DecisionService.java          # Validierungslogik & Orchestrierung
 │       │   └── RuleEngine/
-│       │       └── RuleEngineLauncher.java       # Drools KIE Integration
+│       │       └── RuleEngineLauncher.java       # Drools KIE Integration (@Component)
 │       └── resources/
 │           ├── application.properties            # App-Konfiguration
 │           └── rules/
@@ -105,20 +107,20 @@ SA_Case2_DecisionApplication/
 
 ## 4. Datenmodell
 
-### `DecisionArgs` – Eingabe & interner Zustand
+### `DecisionArgs` – Drools-Fact (Eingabe & interner Zustand)
 
-Das Hauptobjekt, das durch die Regel-Engine verarbeitet wird. Es enthält **Eingabefelder** (werden vor der Verarbeitung gesetzt) und **Ausgabefelder** (werden durch die Regeln befüllt).
+Das zentrale Objekt, das durch die Regel-Engine verarbeitet wird. Es enthält die **Eingabefelder** (vor der Verarbeitung gesetzt), **Ausgabefelder** (durch Regeln befüllt) sowie alle drei **Enumerationen** als innere Klassen.
 
 | Feld                 | Typ                  | Richtung  | Beschreibung                     |
 |----------------------|----------------------|-----------|----------------------------------|
-| `weight`             | `Integer`            | Eingabe   | Gewicht der Sendung in Kilogramm |
+| `weight`             | `Integer`            | Eingabe   | Gewicht der Sendung in Gramm     |
 | `destinationCountry` | `DestinationCountry` | Eingabe   | Zielland der Sendung             |
 | `decisionType`       | `DecisionType`       | Ausgabe   | `AUTOMATIC` oder `MANUAL`        |
 | `shippingMethod`     | `ShippingMethod`     | Ausgabe   | `SPECIAL`, `NORMAL` oder `AIR`   |
 | `carrier`            | `String`             | Ausgabe   | Name des zugewiesenen Carriers   |
 | `ruleId`             | `Integer`            | Ausgabe   | ID der angewendeten Regel        |
 
-**Enumerationen:**
+**Enumerationen (innere Klassen in `DecisionArgs`):**
 
 ```
 DestinationCountry:  ARG | JAP | DE | CH | RUS
@@ -128,8 +130,19 @@ ShippingMethod:      SPECIAL | NORMAL | AIR
 
 ### `Decision` – Rückgabe-DTO
 
-Enthält nur die Ausgabefelder aus `DecisionArgs` und wird als JSON-Antwort zurückgegeben:
+Enthält nur die Ausgabefelder und wird als JSON-Antwort zurückgegeben.  
+> **Wichtig:** `Decision` verwendet direkt die inneren Enum-Typen von `DecisionArgs` (z. B. `DecisionArgs.DecisionType`, `DecisionArgs.ShippingMethod`). Es existiert damit eine **bewusste Kopplung** zwischen den beiden Data-Klassen innerhalb desselben Bounded Context.
 
+```java
+public class Decision {
+    private DecisionArgs.DecisionType decisionType;
+    private DecisionArgs.ShippingMethod shippingMethod;
+    private String carrier;
+    private Integer ruleId;
+}
+```
+
+**Beispiel-Response:**
 ```json
 {
   "decisionType": "AUTOMATIC",
@@ -149,17 +162,17 @@ Drools konvertiert diese Tabelle zur Laufzeit in DRL-Regeln (Drools Rule Languag
 **Regelstruktur:**  
 Jede Zeile in der Excel-Tabelle entspricht einer Regel mit folgenden Spalten:
 
-| Spalte            | Bedeutung                                   |
-|-------------------|---------------------------------------------|
-| Regelname         | Eindeutiger Name der Regel (z. B. `DE`)     |
-| `destinationCountry` | Bedingung: Zielland                      |
-| `weight`          | Bedingung: Gewichtsbereich (z. B. `<60`)    |
-| `decisionType`    | Aktion: Setze `AUTOMATIC` oder `MANUAL`     |
-| `shippingMethod`  | Aktion: Setze Versandmethode                |
-| `carrier`         | Aktion: Setze Carrier-Name                  |
-| `ruleId`          | Aktion: Setze die Regel-ID                  |
+| Spalte               | Bedeutung                                   |
+|----------------------|---------------------------------------------|
+| Regelname            | Eindeutiger Name der Regel (z. B. `DE`)     |
+| `destinationCountry` | Bedingung: Zielland                         |
+| `weight`             | Bedingung: Gewichtsbereich (z. B. `< 60`)   |
+| `decisionType`       | Aktion: Setze `AUTOMATIC` oder `MANUAL`     |
+| `shippingMethod`     | Aktion: Setze Versandmethode                |
+| `carrier`            | Aktion: Setze Carrier-Name                  |
+| `ruleId`             | Aktion: Setze die Regel-ID                  |
 
-**Bekannte Regeln (aus den Fehlermeldungen ablesbar):**
+**Beispielregeln (aus der Entscheidungstabelle):**
 
 | Regel-Name    | Zielland | Gewicht      | Beschreibung                   |
 |---------------|----------|--------------|--------------------------------|
@@ -190,7 +203,16 @@ Er behandelt Fehler und gibt entsprechende HTTP-Statuscodes zurück:
 public class DecisionAPI {
 
     @PostMapping(value = "/make", produces = "application/json")
-    public ResponseEntity<?> makeDecision(@RequestBody DecisionArgs decisionArgs) { ... }
+    public ResponseEntity<?> makeDecision(@RequestBody DecisionArgs decisionArgs) {
+        try {
+            Decision decision = decisionService.validateConsignment(decisionArgs);
+            return ResponseEntity.ok(decision);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Rule engine failure: " + e.getMessage());
+        }
+    }
 }
 ```
 
@@ -200,10 +222,10 @@ public class DecisionAPI {
 
 **Pfad:** `com.fhnw.sa_case2_decisionapplication.Service.DecisionService`
 
-Enthält die **Validierungslogik** vor der Regelauswertung:
+Enthält die **Validierungslogik** vor der Regelauswertung und das **Mapping** ins Rückgabe-DTO:
 
-1. Prüft, ob `destinationCountry` gesetzt ist → sonst `IllegalArgumentException`
-2. Prüft, ob `weight > 0` ist → sonst `IllegalArgumentException`
+1. Prüft, ob `destinationCountry` gesetzt ist → sonst `IllegalArgumentException("Destination Country is missing or empty")`
+2. Prüft, ob `weight != null && weight > 0` ist → sonst `IllegalArgumentException("Weight must be greater than 0")`
 3. Übergibt `DecisionArgs` an den `RuleEngineLauncher`
 4. Mappt das Ergebnis in ein `Decision`-Objekt und gibt es zurück
 
@@ -222,9 +244,10 @@ public class DecisionService {
 
 ### 6.3 Rule Engine – `RuleEngineLauncher`
 
-**Pfad:** `com.fhnw.sa_case2_decisionapplication.RuleEngine.RuleEngineLauncher`
+**Pfad:** `com.fhnw.sa_case2_decisionapplication.RuleEngine.RuleEngineLauncher`  
+**Spring-Annotation:** `@Component` – wird per `@Autowired` in `DecisionService` eingebunden.
 
-Verwaltet den **gesamten Drools-Lebenszyklus** pro Aufruf:
+Verwaltet den **gesamten Drools-Lebenszyklus** pro Aufruf (stateless: jede Anfrage erzeugt eine eigene KIE-Session):
 
 ```
 Schritt 1: System.setProperty("drools.dialect.mvel.strict", "false")
@@ -238,21 +261,22 @@ Schritt 3: ResourceFactory.newClassPathResource("rules/ShippingRules.drl.xls", g
 
 Schritt 4: kieFileSystem.write(dt) → KieBuilder.buildAll()
            → Excel-Tabelle in DRL-Regeln kompilieren
-           → Bei Fehler: RuntimeException werfen
+           → Bei Fehler (Message.Level.ERROR): RuntimeException werfen
 
 Schritt 5: kieContainer.newKieSession()
            → Neue Regel-Session erstellen
 
 Schritt 6: decisionArgs.setDecisionType(MANUAL)  ← Standardwert: MANUELL
            kieSession.insert(decisionArgs)         ← Fact einfügen
-           kieSession.fireAllRules()               ← Alle passenden Regeln auswerten
+           int firedRules = kieSession.fireAllRules()  ← Alle passenden Regeln auswerten
 
 Schritt 7: kieSession.dispose()
            → Session sauber beenden
 
-Schritt 8: Ergebnis zurückgeben
-           → Falls Regeln gefeuert: DecisionType evtl. auf AUTOMATIC gesetzt
-           → Falls keine Regel: bleibt MANUAL
+Schritt 8: Logging & Rückgabe
+           → firedRules > 0: Ergebnis (DecisionType, ShippingMethod, Carrier, RuleId) auf System.out
+           → firedRules == 0: "Keine Regel hat gegriffen – manuelle Entscheidung erforderlich."
+           → DecisionArgs (angereichert) zurückgeben
 ```
 
 **Wichtiger Hinweis:**  
@@ -270,8 +294,8 @@ DecisionAPI.makeDecision(DecisionArgs)
          │
          ▼
 DecisionService.validateConsignment(DecisionArgs)
-    ├─ destinationCountry == null? → 400 Bad Request
-    ├─ weight == null || weight <= 0? → 400 Bad Request
+    ├─ destinationCountry == null?        → 400 Bad Request
+    ├─ weight == null || weight <= 0?     → 400 Bad Request
     └─ Validierung OK
          │
          ▼
@@ -281,10 +305,10 @@ RuleEngineLauncher.makeDecision(DecisionArgs)
     ├─ KIE-Session erstellen
     ├─ decisionType = MANUAL  (Standardwert)
     ├─ Fact in Session einfügen
-    ├─ Regeln auswerten (fireAllRules)
-    │    ├─ Regel trifft zu → setzt decisionType, shippingMethod, carrier, ruleId
-    │    └─ Keine Regel → decisionType bleibt MANUAL
-    └─ Session beenden
+    ├─ int firedRules = fireAllRules()
+    │    ├─ firedRules > 0: Regel trifft zu → setzt decisionType, shippingMethod, carrier, ruleId
+    │    └─ firedRules == 0: decisionType bleibt MANUAL, Logging-Ausgabe
+    └─ Session beenden (dispose)
          │
          ▼
 DecisionService: Ergebnis in Decision-DTO mappen
@@ -317,10 +341,10 @@ Content-Type: application/json
 }
 ```
 
-| Feld                 | Typ     | Pflicht | Beschreibung                                                 |
-|----------------------|---------|-------|--------------------------------------------------------------|
-| `weight`             | Integer |  Ja | Gewicht in Gramm (muss > 0 sein)                             |
-| `destinationCountry` | String  |  Ja | Zielland: `ARG`, `JAP`, `DE`, `CH`, `RUS`                   |
+| Feld                 | Typ     | Pflicht | Beschreibung                                      |
+|----------------------|---------|---------|---------------------------------------------------|
+| `weight`             | Integer | Ja      | Gewicht in Gramm (muss > 0 sein)                  |
+| `destinationCountry` | String  | Ja      | Zielland: `ARG`, `JAP`, `DE`, `CH`, `RUS`         |
 
 **Antwort (200 OK):**
 ```json
@@ -334,10 +358,10 @@ Content-Type: application/json
 
 **Fehlerfälle:**
 
-| HTTP-Code | Ursache                                     |
-|-----------|---------------------------------------------|
-| `400`     | Zielland fehlt oder Gewicht ist ≤ 0         |
-| `500`     | Fehler beim Laden/Kompilieren der Regeln    |
+| HTTP-Code | Ursache                                               |
+|-----------|-------------------------------------------------------|
+| `400`     | Zielland fehlt oder Gewicht ist `null` / ≤ 0          |
+| `500`     | Fehler beim Laden/Kompilieren der Drools-Regeln       |
 
 **Beispiel mit curl:**
 ```bash
@@ -357,10 +381,10 @@ spring.application.name=SA_Case2_DecisionApplication
 server.port=8081
 ```
 
-| Eigenschaft                   | Wert                          | Beschreibung                    |
-|-------------------------------|-------------------------------|---------------------------------|
-| `spring.application.name`     | SA_Case2_DecisionApplication  | Anwendungsname                  |
-| `server.port`                 | 8081                          | HTTP-Port des REST-Servers      |
+| Eigenschaft               | Wert                         | Beschreibung               |
+|---------------------------|------------------------------|----------------------------|
+| `spring.application.name` | SA_Case2_DecisionApplication | Anwendungsname             |
+| `server.port`             | 8081                         | HTTP-Port des REST-Servers |
 
 ---
 
@@ -397,9 +421,9 @@ java -jar target/SA_Case2_DecisionApplication-0.0.1-SNAPSHOT.jar
 
 Im Projekt ist ein einfacher Spring-Boot-Kontexttest enthalten:
 
-| Testklasse                          | Test            | Beschreibung                                  |
-|-------------------------------------|-----------------|-----------------------------------------------|
-| `SaCase2DecisionApplicationTests`   | `contextLoads`  | Prüft, ob der Spring-Anwendungskontext korrekt startet |
+| Testklasse                        | Test           | Beschreibung                                           |
+|-----------------------------------|----------------|--------------------------------------------------------|
+| `SaCase2DecisionApplicationTests` | `contextLoads` | Prüft, ob der Spring-Anwendungskontext korrekt startet |
 
 Tests ausführen:
 
@@ -409,5 +433,4 @@ Tests ausführen:
 
 ---
 
-*Dokumentation erstellt für SA Case 2 – FHNW Software Architecture*
-
+*Dokumentation erstellt für SA Case 2 – FHNW Software Architecture | Stand: März 2026*
